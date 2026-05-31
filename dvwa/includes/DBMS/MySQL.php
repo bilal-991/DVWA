@@ -39,7 +39,7 @@ if( !@((bool)mysqli_query($GLOBALS["___mysqli_ston"], "USE " . $_DVWA[ 'db_datab
 	dvwaPageReload();
 }
 
-$create_tb = "CREATE TABLE users (user_id int(6),first_name varchar(15),last_name varchar(15), user varchar(15), password varchar(32),avatar varchar(70), last_login TIMESTAMP, failed_login INT(3), PRIMARY KEY (user_id));";
+$create_tb = "CREATE TABLE users (user_id int(6),first_name varchar(15),last_name varchar(15), user varchar(15), password varchar(32),avatar varchar(70), last_login TIMESTAMP, failed_login INT(3), PRIMARY KEY (user_id)) ENGINE=InnoDB;";
 if( !mysqli_query($GLOBALS["___mysqli_ston"],  $create_tb ) ) {
 	dvwaMessagePush( "Table could not be created<br />SQL: " . ((is_object($GLOBALS["___mysqli_ston"])) ? mysqli_error($GLOBALS["___mysqli_ston"]) : (($___mysqli_res = mysqli_connect_error()) ? $___mysqli_res : false)) );
 	dvwaPageReload();
@@ -64,7 +64,7 @@ if( !mysqli_query($GLOBALS["___mysqli_ston"],  $insert ) ) {
 dvwaMessagePush( "Data inserted into 'users' table." );
 
 // Add role column to users table
-$alter_users = "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user';";
+$alter_users = "ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'user';";
 if( !mysqli_query($GLOBALS["___mysqli_ston"], $alter_users) ) {
     dvwaMessagePush( "Could not add role column to users table<br />SQL: " . ((is_object($GLOBALS["___mysqli_ston"])) ? mysqli_error($GLOBALS["___mysqli_ston"]) : (($___mysqli_res = mysqli_connect_error()) ? $___mysqli_res : false)) );
     dvwaPageReload();
@@ -140,14 +140,30 @@ if (file_exists($conf)) {
 
 dvwaMessagePush( "Backup file /config/config.inc.php.bak automatically created" );
 
-// Add account_enabled columns to users table
-$alter_users_dept = "ALTER TABLE users 
-    ADD COLUMN IF NOT EXISTS account_enabled TINYINT(1) DEFAULT 1;";
-if( !mysqli_query($GLOBALS["___mysqli_ston"], $alter_users_dept) ) {
-    dvwaMessagePush( "Could not add account_enabled column to users table<br />SQL: " . ((is_object($GLOBALS["___mysqli_ston"])) ? mysqli_error($GLOBALS["___mysqli_ston"]) : (($___mysqli_res = mysqli_connect_error()) ? $___mysqli_res : false)) );
+// Add account_enabled column to users table (for MySQL/MariaDB versions without ADD COLUMN IF NOT EXISTS)
+$check_account_enabled_col = "SELECT COUNT(*) AS col_exists
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = '" . $_DVWA[ 'db_database' ] . "'
+      AND TABLE_NAME = 'users'
+      AND COLUMN_NAME = 'account_enabled'";
+$check_result = mysqli_query($GLOBALS["___mysqli_ston"], $check_account_enabled_col);
+
+if( !$check_result ) {
+    dvwaMessagePush( "Could not verify account_enabled column in users table<br />SQL: " . ((is_object($GLOBALS["___mysqli_ston"])) ? mysqli_error($GLOBALS["___mysqli_ston"]) : (($___mysqli_res = mysqli_connect_error()) ? $___mysqli_res : false)) );
     dvwaPageReload();
 }
-dvwaMessagePush( "Added account_enabled columns to users table." );
+
+$check_row = mysqli_fetch_assoc($check_result);
+if( (int)$check_row['col_exists'] === 0 ) {
+    $alter_users_dept = "ALTER TABLE users ADD COLUMN account_enabled TINYINT(1) DEFAULT 1;";
+    if( !mysqli_query($GLOBALS["___mysqli_ston"], $alter_users_dept) ) {
+        dvwaMessagePush( "Could not add account_enabled column to users table<br />SQL: " . ((is_object($GLOBALS["___mysqli_ston"])) ? mysqli_error($GLOBALS["___mysqli_ston"]) : (($___mysqli_res = mysqli_connect_error()) ? $___mysqli_res : false)) );
+        dvwaPageReload();
+    }
+    dvwaMessagePush( "Added account_enabled column to users table." );
+} else {
+    dvwaMessagePush( "account_enabled column already exists in users table." );
+}
 
 // Done
 dvwaMessagePush( "<em>Setup successful</em>!" );
